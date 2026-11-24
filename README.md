@@ -280,7 +280,7 @@ pip install -r requirements.txt
 ```powershell
 pytest tests/ -v
 ```
-*(All 86 tests covering URL extraction, calculations, batch inference, Kannada analysis, emoji preservation, compound multipliers, sarcasm inversion, 6 labels, 4 severities, and model comparisons will run and pass).*
+*(All 89 tests covering URL extraction, calculations, batch inference, Kannada analysis, emoji preservation, compound multipliers, sarcasm inversion, 6 labels, 4 severities, and model comparisons will run and pass).*
 
 ### Step 5: Launch the Web Application
 ```powershell

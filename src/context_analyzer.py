@@ -56,7 +56,11 @@ THREAT_WORDS = {
 GRATITUDE_MARKERS = [
     "thank", "thanks", "helpful", "informative", "tutorial", "well done",
     "kudos", "appreciate", "great work", "loved this", "bless", "congrats",
-    "congratulations", "keep it up", "respect"
+    "congratulations", "keep it up", "respect",
+    # Praise expressions frequently mis-scored by the ML model
+    "hats off", "hat's off", "hatsoff", "salute", "well played", "props to",
+    "big up", "shout out", "shoutout", "cheers", "bravo", "awesome work",
+    "good job", "nice work", "great job", "well done everyone"
 ]
 
 

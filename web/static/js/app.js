@@ -33,7 +33,14 @@ document.addEventListener("DOMContentLoaded", () => {
       startAnalysis();
     });
   }
+
+  // Clear any stale cached key so server .env key is always used
+  localStorage.removeItem("yt_custom_api_key");
 });
+
+function getActiveApiKey() {
+  return "";
+}
 
 function getVideoId(value) {
   if (!value || typeof value !== "string") return null;
@@ -101,17 +108,27 @@ async function startAnalysis() {
   // 2. Prepare Right Column Loading State
   showLoadingState(true);
 
-  setMessage("Retrieving and analyzing up to 5,000 comments with machine learning ...", "success");
+  const genreSelect = document.getElementById("genre-select");
+  const selectedGenre = genreSelect ? genreSelect.value : "General";
+
+  setMessage(`Retrieving comments and analyzing with ${selectedGenre !== "General" ? selectedGenre + " contextual" : ""} machine learning ...`, "success");
 
   try {
+    const activeKey = getActiveApiKey();
+    const reqPayload = {
+      url: urlValue,
+      genre: selectedGenre,
+      max_comments: 5000,
+      include_replies: true
+    };
+    if (activeKey) {
+      reqPayload.api_key = activeKey;
+    }
+
     const response = await fetch("/api/analyze_youtube", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: urlValue,
-        max_comments: 5000,
-        include_replies: true
-      })
+      body: JSON.stringify(reqPayload)
     });
 
     const data = await response.json();
@@ -124,6 +141,7 @@ async function startAnalysis() {
     }
 
     analysisData = data;
+
     renderAnalysisResults(data);
     if (data.total_analyzed === 0) {
       setMessage(data.disclaimer || "Video loaded successfully. No public comments found on this video.", "success");
@@ -223,10 +241,14 @@ function updateVideoMeta(meta, videoId) {
   // Tags
   const tagsRow = document.getElementById("video-tags-row");
   if (tagsRow) {
-    const tags = Array.isArray(meta.tags) ? meta.tags : [];
+    const rawTags = Array.isArray(meta.tags) ? meta.tags : [];
+    const tags = rawTags.filter(Boolean).slice(0, 12);
     if (tags.length > 0) {
       tagsRow.style.display = "flex";
-      tagsRow.innerHTML = tags.map(t => `<span class="video-tag-pill">#${escapeHtml(t)}</span>`).join("");
+      tagsRow.innerHTML = tags.map(t => {
+        const cleanTag = String(t).trim().replace(/^#+/, "");
+        return `<span class="video-tag-pill">#${escapeHtml(cleanTag)}</span>`;
+      }).join("");
     } else {
       tagsRow.style.display = "none";
       tagsRow.innerHTML = "";
@@ -314,6 +336,15 @@ function renderAnalysisResults(data) {
 
   // 1. Update Video Info and Description below player
   updateVideoMeta(data.video_meta, data.video_id);
+
+  // Update Genre Context Chip in Video Overview
+  const chipGenre = document.getElementById("chip-genre");
+  const valGenre = document.getElementById("val-genre");
+  if (chipGenre && valGenre) {
+    const activeGenre = data.video_genre || "General";
+    valGenre.textContent = activeGenre;
+    chipGenre.style.display = "flex";
+  }
 
   // 2. Metrics Numbers
   const total = data.total_analyzed || 0;
@@ -528,6 +559,14 @@ function createCommentCardElement(c) {
   // Sarcasm Badge
   const sarcasmBadge = c.sarcasm_detected ? `<span class="badge-sarcasm" title="Sarcastic mockery detected">🙃 Sarcasm</span>` : "";
 
+  // Genre & Context-Adjusted Badges
+  const genreBadge = (c.video_genre && c.video_genre !== "General")
+    ? `<span class="badge-genre" title="Evaluated within ${escapeHtml(c.video_genre)} genre context">🎭 ${escapeHtml(c.video_genre)}</span>`
+    : "";
+  const genreAdjustedBadge = c.genre_adjusted
+    ? `<span class="badge-genre-adjusted" title="Toxicity probabilities were mitigated/adjusted by genre context">⚖️ Context-Adjusted</span>`
+    : "";
+
   // Emoji Only Badge
   const emojiOnlyBadge = c.is_emoji_only ? `<span class="badge-pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">Emoji-Only</span>` : "";
 
@@ -555,6 +594,8 @@ function createCommentCardElement(c) {
       </div>
       <div class="comment-badges-group">
         ${langBadge}
+        ${genreBadge}
+        ${genreAdjustedBadge}
         ${sarcasmBadge}
         ${emojiOnlyBadge}
         ${sevBadge}
@@ -625,7 +666,3 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
-
-
-
-

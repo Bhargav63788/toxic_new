@@ -27,6 +27,7 @@ from src.kannada_analyzer import (
     get_kannada_context_analyzer
 )
 from src.emoji_analyzer import get_emoji_analyzer
+from src.genre_analyzer import normalize_genre, get_genre_evaluator
 
 # Built-in demo comments for testing without requiring an immediate Google API key
 # Interleaves text-only, emoji-only, and text-plus-emoji comments across Clean and Toxic
@@ -269,11 +270,26 @@ def fetch_youtube_comments_and_meta(
     Returns: (comments_list, video_meta_dict, error_message)
     """
     # Check for API key in args or environment
-    key = api_key or os.environ.get("YOUTUBE_API_KEY", "").strip()
+    key = (api_key or "").strip()
+    if not key:
+        key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if not key:
+        # Attempt to load from project root .env
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env"))
+        if os.path.isfile(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        if k.strip() == "YOUTUBE_API_KEY":
+                            key = v.strip().strip("'\"")
+                            os.environ["YOUTUBE_API_KEY"] = key
+                            break
 
     target_limit = int(max_comments) if (max_comments is not None and int(max_comments) > 0) else 5000
 
-    if video_id.startswith("demo") or (not key and use_demo_if_missing_key and video_id == "dQw4w9WgXcQ"):
+    if video_id.startswith("demo") or (use_demo_if_missing_key and video_id == "dQw4w9WgXcQ"):
         # Provide sample demonstration comments up to target_limit without artificial duplication
         demo_meta = {
             "title": "Demonstration Video: Machine Learning Content Moderation",
@@ -404,7 +420,23 @@ def fetch_youtube_comments_and_meta(
                     textFormat="plainText",
                     pageToken=next_page_token
                 )
-                response = request.execute()
+                try:
+                    response = request.execute()
+                except HttpError as item_err:
+                    # If part="snippet,replies" failed due to replies permission, fallback to "snippet" only
+                    if "replies" in part_param:
+                        part_param = "snippet"
+                        fallback_req = youtube.commentThreads().list(
+                            part="snippet",
+                            videoId=video_id,
+                            maxResults=batch_size,
+                            order=order_strategy,
+                            textFormat="plainText",
+                            pageToken=next_page_token
+                        )
+                        response = fallback_req.execute()
+                    else:
+                        raise item_err
 
                 items = response.get("items", [])
                 if not items:
@@ -455,28 +487,79 @@ def fetch_youtube_comments_and_meta(
     except HttpError as e:
         status_code = e.resp.status
         reason = str(e)
-        if "commentsDisabled" in reason:
-            return [], video_meta, "Comments are disabled for this YouTube video."
-        elif "videoNotFound" in reason:
-            return [], {}, "The requested YouTube video was not found or is private."
-        elif "quotaExceeded" in reason:
-            return [], {}, "YouTube Data API quota exceeded. Please check your Google Cloud quota limits."
-        elif status_code == 400 or "keyInvalid" in reason:
-            return [], {}, "Invalid YouTube Data API key provided. Please verify your API key."
+
+        # Parse detailed Google API error JSON if available
+        err_msg = ""
+        err_reason = ""
+        try:
+            import json as _json
+            err_data = _json.loads(e.content.decode("utf-8"))
+            err_obj = err_data.get("error", {})
+            err_msg = err_obj.get("message", "")
+            errors_list = err_obj.get("errors", [])
+            if errors_list and isinstance(errors_list, list):
+                err_reason = str(errors_list[0].get("reason", ""))
+        except Exception:
+            pass
+
+        combined_text = f"{reason} {err_msg} {err_reason}".lower()
+
+        if (
+            "commentsdisabled" in combined_text
+            or "comments are disabled" in combined_text
+            or err_reason == "commentsDisabled"
+            or "insufficient permissions" in combined_text
+            or "cannot be retrieved due to insufficient permissions" in combined_text
+            or "not be properly authorized" in combined_text
+        ):
+            return [], video_meta, "Comments are disabled or restricted on this YouTube video by the creator."
+        elif "videonotfound" in combined_text or "could not be found" in combined_text or err_reason == "videoNotFound":
+            return [], {}, "The requested YouTube video was not found or is private/removed."
+        elif "quotaexceeded" in combined_text or "quota" in combined_text or err_reason == "quotaExceeded":
+            return [], {}, "YouTube Data API quota exceeded (10,000 units/day limit). Please check your Google Cloud quota limits or try again later."
+        elif any(k in combined_text for k in ("keyinvalid", "api_key_invalid", "api key not valid", "api key invalid")):
+            return [], {}, "Invalid YouTube Data API key provided. Please verify your API key in .env or Google Cloud Console."
+        elif "accessnotconfigured" in combined_text or "has not been used in project" in combined_text or err_reason == "accessNotConfigured":
+            return [], {}, "YouTube Data API v3 is not enabled in your Google Cloud project. Please enable it in Google Cloud Console."
+        elif status_code == 403:
+            detail = err_msg or e.reason or "Access forbidden"
+            if "ip" in detail.lower() or "referer" in detail.lower() or "restriction" in detail.lower():
+                return [], {}, f"YouTube API key restriction error (HTTP 403): {detail}. If your key has IP/HTTP referrer restrictions, adjust them in Google Cloud Console."
+            return [], video_meta, f"YouTube API access forbidden (HTTP 403): {detail}."
         else:
-            return [], video_meta, f"YouTube API error (HTTP {status_code}): {e.reason or 'Unable to fetch comments'}"
+            msg = err_msg or e.reason or "Unable to fetch comments"
+            return [], video_meta, f"YouTube API error (HTTP {status_code}): {msg}"
     except Exception as e:
-        return [], {}, f"Unexpected error connecting to YouTube API: {str(e)}"
+        err_str = str(e)
+        err_lower = err_str.lower()
+        if any(term in err_lower for term in (
+            "unable to find the server at youtube.googleapis.com",
+            "servernotfounderror",
+            "getaddrinfo failed",
+            "nameresolutionerror",
+            "connection refused",
+            "network is unreachable"
+        )):
+            return [], {}, (
+                "Unable to connect to YouTube API server (youtube.googleapis.com). "
+                "Please verify your internet connection, DNS settings, or proxy/firewall and try again."
+            )
+        return [], {}, f"Unexpected error connecting to YouTube API: {err_str}"
 
 
 def analyze_youtube_comments(
     comments: List[Dict[str, Any]],
-    artifacts: Dict[str, Any]
+    artifacts: Dict[str, Any],
+    genre: str = "General"
 ) -> Dict[str, Any]:
     """
     Process fetched YouTube comments through the trained multi-label model
     combined with full sentence contextual semantic evaluation.
     Computes exact percentages and category distributions.
+
+    Args:
+        genre: Video genre string passed from frontend/API ('Comedy', 'Politics', etc.)
+               Used as supplementary context — never the sole decision factor.
     """
     total = len(comments)
     if total == 0:
@@ -555,6 +638,10 @@ def analyze_youtube_comments(
     sarcasm_count = 0
     toxic_emoji_freq = {}
     positive_emoji_freq = {}
+
+    # Genre setup (applied per-comment as supplementary context)
+    canonical_genre = normalize_genre(genre)
+    genre_evaluator = get_genre_evaluator()
 
     for idx, c in enumerate(comments):
         raw_scores = {l: float(raw_label_probs[l][idx]) for l in labels}
@@ -644,14 +731,33 @@ def analyze_youtube_comments(
                     and not context_eval.get("is_violent_threat")
                     and not emoji_res["sarcasm_detected"]
                 ):
-                    for l in ["toxic", "insult", "severe_toxic"]:
-                        c_scores[l] = min(c_scores.get(l, 0.0), 0.20)
+                    for l in ["toxic", "insult", "severe_toxic", "obscene"]:
+                        c_scores[l] = min(c_scores.get(l, 0.0), 0.18)
                         if l in c_flags:
                             c_flags.remove(l)
                     is_toxic = len(c_flags) > 0
 
             if is_toxic:
                 emoji_toxic_count += 1
+
+        # Genre-aware context adjustment (supplementary, never sole decision)
+        genre_adjusted = False
+        if canonical_genre != "General":
+            is_directed_attack = bool(context_eval.get("is_directed_attack", False))
+            is_violent_threat = bool(context_eval.get("is_violent_threat", False))
+            g_eval = genre_evaluator.evaluate(
+                genre=canonical_genre,
+                adjusted_probs=c_scores,
+                flagged_labels=c_flags,
+                is_directed_attack=is_directed_attack,
+                is_violent_threat=is_violent_threat,
+                language_code=lang_info.get("language", "english"),
+            )
+            if g_eval["genre_adjusted"] and not g_eval["genre_skipped"]:
+                c_scores = g_eval["genre_probs"]
+                c_flags = g_eval["genre_flags"]
+                is_toxic = len(c_flags) > 0
+                genre_adjusted = True
 
         if is_toxic:
             toxic_count += 1
@@ -698,7 +804,9 @@ def analyze_youtube_comments(
             "sarcasm_detected": emoji_res["sarcasm_detected"],
             "emojis_detected": emoji_res["emojis_detected"],
             "emoji_ui_chips": emoji_res["ui_chips"],
-            "emoji_contribution": emoji_res.get("context_reasons", [])
+            "emoji_contribution": emoji_res.get("context_reasons", []),
+            "video_genre": canonical_genre,
+            "genre_adjusted": genre_adjusted
         })
 
     non_toxic_count = total - toxic_count

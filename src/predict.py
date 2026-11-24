@@ -26,6 +26,7 @@ from src.kannada_analyzer import (
     get_kannada_context_analyzer
 )
 from src.emoji_analyzer import get_emoji_analyzer, compare_predictions
+from src.genre_analyzer import normalize_genre, get_genre_evaluator
 
 _LOADED_ARTIFACTS = None
 
@@ -122,13 +123,20 @@ def predict_comment(
     artifacts: Optional[Dict[str, Any]] = None,
     threshold_overrides: Optional[Dict[str, float]] = None,
     include_emojis: bool = True,
-    return_comparison: bool = False
+    return_comparison: bool = False,
+    video_genre: str = "General",
+    include_genre: bool = True,
 ) -> Dict[str, Any]:
     """
     Analyze comment and return structured multi-label classification results.
     Integrates full sentence context evaluation, linguistic negation, and
     comprehensive emoji semantics (hostile gestures, violent threats, sarcasm,
     repetition multipliers, and cultural Kannada idioms).
+
+    Args:
+        video_genre:    Video genre string ('Comedy', 'Politics', etc.). Used as
+                        supplementary context — never the sole decision factor.
+        include_genre:  Set False when calling recursively for baseline comparison.
     """
     t_start = time.perf_counter()
 
@@ -261,12 +269,22 @@ def predict_comment(
                     if r not in context_reasons:
                         context_reasons.append(r)
 
-            # Hostile / Violent / Obscene emojis
+            # Hostile / Violent / Obscene emojis — only apply deltas for genuinely hostile emoji
+            # categories. Sarcastic-mockery category emojis (😂, 🤣 etc.) now have zero base_probs
+            # in EMOJI_LEXICON, but this guard provides defence-in-depth for future additions:
+            # never apply sarcasm-sentiment deltas unless sarcasm was actually confirmed.
             emoji_deltas = emoji_analysis["label_deltas"]
+            emoji_sarcasm = emoji_analysis["sarcasm_detected"]
+            primary_emoji_sentiment = emoji_analysis.get("primary_sentiment", "")
             thresh_map = thresholds if not is_kannada_lang else artifacts.get("kannada", {}).get("thresholds", thresholds)
 
             for l in labels:
                 d = emoji_deltas.get(l, 0.0)
+                if d == 0.0:
+                    continue
+                # Skip sarcasm-category deltas when sarcasm is not confirmed
+                if primary_emoji_sentiment == "sarcastic" and not emoji_sarcasm:
+                    continue
                 th = thresh_map.get(l, 0.35)
                 if d >= th:
                     adjusted_probs[l] = max(adjusted_probs.get(l, 0.0), d)
@@ -277,15 +295,16 @@ def predict_comment(
                     if adjusted_probs[l] >= th and l not in flagged_labels:
                         flagged_labels.append(l)
 
-            # Mitigating positive emojis (when no hostile signals or attacks present)
+            # Mitigating positive emojis (when no hostile signals or attacks present).
+            # Also cap "obscene" to prevent false positives on praise-phrased comments.
             if (
                 emoji_analysis["is_mitigating"]
                 and not base_context_eval.get("is_directed_attack")
                 and not base_context_eval.get("is_violent_threat")
                 and not emoji_analysis["sarcasm_detected"]
             ):
-                for l in ["toxic", "insult", "severe_toxic"]:
-                    adjusted_probs[l] = min(adjusted_probs.get(l, 0.0), 0.20)
+                for l in ["toxic", "insult", "severe_toxic", "obscene"]:
+                    adjusted_probs[l] = min(adjusted_probs.get(l, 0.0), 0.18)
                     if l in flagged_labels:
                         flagged_labels.remove(l)
                 context_reasons.append("Friendly/positive emojis confirm constructive, non-hostile intention")
@@ -293,6 +312,29 @@ def predict_comment(
             for r in emoji_analysis.get("context_reasons", []):
                 if r not in context_reasons:
                     context_reasons.append(r)
+
+    is_toxic = len(flagged_labels) > 0
+
+    # 4b. Apply Genre-Aware Context (supplementary, never sole decision)
+    canonical_genre = normalize_genre(video_genre)
+    genre_eval_result = None
+    if include_genre and canonical_genre != "General":
+        is_directed_attack = bool(base_context_eval.get("is_directed_attack", False))
+        is_violent_threat = bool(base_context_eval.get("is_violent_threat", False))
+        genre_eval_result = get_genre_evaluator().evaluate(
+            genre=canonical_genre,
+            adjusted_probs=adjusted_probs,
+            flagged_labels=flagged_labels,
+            is_directed_attack=is_directed_attack,
+            is_violent_threat=is_violent_threat,
+            language_code=lang_info.get("language", "english"),
+        )
+        if genre_eval_result["genre_adjusted"] and not genre_eval_result["genre_skipped"]:
+            adjusted_probs = genre_eval_result["genre_probs"]
+            flagged_labels = genre_eval_result["genre_flags"]
+            genre_reason = genre_eval_result["genre_reason"]
+            if genre_reason and genre_reason not in context_reasons:
+                context_reasons.append(genre_reason)
 
     is_toxic = len(flagged_labels) > 0
 
@@ -365,13 +407,28 @@ def predict_comment(
         "language_code": lang_info["language"]
     }
 
+    # Attach genre metadata
+    result["video_genre"] = canonical_genre
+    result["genre_adjusted"] = bool(
+        genre_eval_result and genre_eval_result.get("genre_adjusted") and not genre_eval_result.get("genre_skipped")
+    )
+    if genre_eval_result:
+        result["genre_context"] = {
+            "genre": canonical_genre,
+            "skipped": genre_eval_result.get("genre_skipped", False),
+            "adjusted": genre_eval_result.get("genre_adjusted", False),
+            "reason": genre_eval_result.get("genre_reason", ""),
+        }
+
     if return_comparison:
         base_res = predict_comment(
             raw_text=raw_text,
             artifacts=artifacts,
             threshold_overrides=threshold_overrides,
             include_emojis=False,
-            return_comparison=False
+            return_comparison=False,
+            video_genre="General",
+            include_genre=False,
         )
         result["model_comparison"] = compare_predictions(base_res, result)
 

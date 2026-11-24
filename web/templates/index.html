@@ -13,255 +13,305 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=6">
+  <link rel="stylesheet" href="/static/css/style.css?v=15">
 </head>
 
 <body>
   <main class="page">
-    <header class="heading">
-      <div class="eyebrow-row">
-        <p class="eyebrow">YouTube Toxic Comment &amp; Emoji Intelligence System</p>
-        <span class="lang-support-pill"><span class="lang-dot"></span> English &amp; ಕನ್ನಡ (Kannada)</span>
-        <span class="lang-support-pill pill-emoji"><span class="lang-dot dot-emoji"></span> Emoji &amp; Sarcasm Intelligence</span>
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">YouTube Toxic Comment Analyzer</h1>
+          </div>
+          <p class="brand-desc">Contextual Multi-Label AI Moderation for YouTube Comments</p>
+        </div>
       </div>
-      <h1>YouTube Toxic Comment Analyzer</h1>
+      <div class="header-badges">
+        <span class="badge-tech"><span class="tech-dot dot-en"></span> English</span>
+        <span class="badge-tech"><span class="tech-dot dot-kn"></span> ಕನ್ನಡ (Kannada)</span>
+        <span class="badge-tech"><span class="tech-dot dot-emoji"></span> Emoji NLP</span>
+      </div>
     </header>
 
-    <!-- Main Link Input Form -->
-    <form class="link-form" id="video-form" novalidate onsubmit="event.preventDefault(); startAnalysis();">
-        <input id="video-url" type="url" autocomplete="off"
-          placeholder="Paste a YouTube video link (e.g., https://www.youtube.com/watch?v=... or https://youtu.be/...)"
-          aria-label="YouTube video link" required>
+    <div id="view-detection">
+
+      <!-- Main Link Input Form -->
+      <form class="link-form" id="video-form" novalidate onsubmit="event.preventDefault(); startAnalysis();">
+        <div class="input-url-box">
+          <span class="input-url-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+            </svg>
+          </span>
+          <input id="video-url" type="url" autocomplete="off"
+            placeholder="Paste a YouTube video or Shorts link (e.g., https://www.youtube.com/watch?v=...)"
+            aria-label="YouTube video link" required>
+        </div>
+        <div class="genre-input-wrap">
+          <label for="genre-select" class="genre-inline-label">&#127917; Genre:</label>
+          <select id="genre-select" class="genre-select-dropdown" aria-label="Select Video Genre">
+            <option value="General" selected>Auto / General</option>
+            <option value="Comedy">Comedy</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Education">Education</option>
+            <option value="Politics">Politics</option>
+            <option value="Gaming">Gaming</option>
+            <option value="Music">Music</option>
+            <option value="Sports">Sports</option>
+            <option value="News">News</option>
+            <option value="Technology">Technology</option>
+            <option value="Movies">Movies</option>
+            <option value="Sensitive / Social Issues">Sensitive / Social Issues</option>
+          </select>
+        </div>
         <button type="submit" id="submit-btn">
-          <span id="btn-text">Analyze comments</span>
+          <span id="btn-text">Analyze Comments</span>
         </button>
       </form>
 
       <!-- Status message -->
       <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
 
-    <!-- Two-Column Layout -->
-    <section class="columns" aria-label="Video preview and comment analysis">
+      <!-- Two-Column Layout -->
+      <section class="columns" aria-label="Video preview and comment analysis">
 
-      <!-- LEFT COLUMN: Video Preview & Details -->
-      <article class="panel video-panel">
-        <div class="panel-header-simple">
-          <h2 class="panel-title">Video Overview</h2>
-        </div>
-
-        <div class="video-frame" id="video-frame">
-          <div class="video-placeholder-content">
-            <span class="video-placeholder-icon">&#9654;</span>
-            <p id="video-placeholder-text">Paste any YouTube video link above to preview the player, explore its full
-              description, and analyze comments.</p>
+        <!-- LEFT COLUMN: Video Preview & Details -->
+        <article class="panel video-panel">
+          <div class="panel-header-simple">
+            <h2 class="panel-title">Video Overview</h2>
           </div>
-        </div>
 
-        <!-- Rich Video Details Section -->
-        <div id="video-info" class="video-info-block" style="display: none;">
+          <div class="video-frame" id="video-frame">
+            <div class="video-placeholder-content">
+              <span class="video-placeholder-icon">&#9654;</span>
+              <p id="video-placeholder-text">Paste any YouTube video link above to preview the player, explore its
+                full
+                description, and analyze comments.</p>
+            </div>
+          </div>
 
-          <!-- Channel & External Link Bar -->
-          <div class="video-channel-row">
-            <div class="channel-wrapper">
-              <div class="channel-avatar" id="channel-avatar">Y</div>
-              <div class="channel-texts">
-                <span id="video-channel" class="video-meta-channel"></span>
-                <span id="video-published" class="video-meta-date"></span>
+          <!-- Rich Video Details Section -->
+          <div id="video-info" class="video-info-block" style="display: none;">
+
+            <!-- Channel & External Link Bar -->
+            <div class="video-channel-row">
+              <div class="channel-wrapper">
+                <div class="channel-avatar" id="channel-avatar">Y</div>
+                <div class="channel-texts">
+                  <span id="video-channel" class="video-meta-channel"></span>
+                  <span id="video-published" class="video-meta-date"></span>
+                </div>
+              </div>
+              <a id="video-external-link" href="#" target="_blank" rel="noopener" class="video-external-btn">
+                Watch on YouTube &nearr;
+              </a>
+            </div>
+
+            <!-- Title -->
+            <h3 id="video-title" class="video-meta-title"></h3>
+
+            <!-- Video Stat Chips -->
+            <div class="video-stats-chips" id="video-stats-chips">
+              <div class="stat-chip" id="chip-views" title="Total Views">
+                <span class="chip-icon">&#128065;&#65039;</span>
+                <span class="chip-label">Views</span>
+                <strong class="chip-value" id="val-views">-</strong>
+              </div>
+              <div class="stat-chip" id="chip-likes" title="Likes">
+                <span class="chip-icon">&#128077;</span>
+                <span class="chip-label">Likes</span>
+                <strong class="chip-value" id="val-likes">-</strong>
+              </div>
+              <div class="stat-chip" id="chip-comments" title="Total Comments on YouTube">
+                <span class="chip-icon">&#128172;</span>
+                <span class="chip-label">Comments</span>
+                <strong class="chip-value" id="val-comments">-</strong>
+              </div>
+              <div class="stat-chip" id="chip-genre" title="Contextual Video Genre" style="display: none;">
+                <span class="chip-icon">&#127917;</span>
+                <span class="chip-label">Genre</span>
+                <strong class="chip-value" id="val-genre">General</strong>
               </div>
             </div>
-            <a id="video-external-link" href="#" target="_blank" rel="noopener" class="video-external-btn">
-              Watch on YouTube &nearr;
-            </a>
-          </div>
 
-          <!-- Title -->
-          <h3 id="video-title" class="video-meta-title"></h3>
-
-          <!-- Video Stat Chips -->
-          <div class="video-stats-chips" id="video-stats-chips">
-            <div class="stat-chip" id="chip-views" title="Total Views">
-              <span class="chip-icon">&#128065;&#65039;</span>
-              <span class="chip-label">Views</span>
-              <strong class="chip-value" id="val-views">-</strong>
+            <!-- Video Tags Row -->
+            <div class="video-tags-row" id="video-tags-row" style="display: none;">
+              <!-- Dynamically populated tags -->
             </div>
-            <div class="stat-chip" id="chip-likes" title="Likes">
-              <span class="chip-icon">&#128077;</span>
-              <span class="chip-label">Likes</span>
-              <strong class="chip-value" id="val-likes">-</strong>
-            </div>
-            <div class="stat-chip" id="chip-comments" title="Total Comments on YouTube">
-              <span class="chip-icon">&#128172;</span>
-              <span class="chip-label">Comments</span>
-              <strong class="chip-value" id="val-comments">-</strong>
-            </div>
-          </div>
 
-          <!-- Video Tags Row -->
-          <div class="video-tags-row" id="video-tags-row" style="display: none;">
-            <!-- Dynamically populated tags -->
-          </div>
-
-          <!-- Expandable Video Description Box -->
-          <div class="video-desc-card" id="video-desc-card">
-            <div class="desc-card-top">
-              <span class="desc-card-title">&#128221; Description</span>
-              <button type="button" class="desc-toggle-btn" id="desc-toggle-btn" onclick="toggleDescription()">Show
-                more</button>
-            </div>
-            <div class="desc-content collapsed" id="video-description">
-              No description available for this video.
-            </div>
-          </div>
-
-        </div>
-      </article>
-
-      <!-- RIGHT COLUMN: Comment Analysis -->
-      <article class="panel results-panel">
-        <div class="results-header">
-          <h2 class="panel-title">Comment analysis</h2>
-          <span class="panel-tag">Toxicity Engine</span>
-        </div>
-
-        <!-- 1. Initial Empty State -->
-        <div class="empty-state" id="empty-state" role="status" aria-live="polite">
-          <span class="empty-icon" aria-hidden="true">i</span>
-          <h2>Awaiting YouTube Video</h2>
-          <p>Paste a YouTube video link above and click <strong>Analyze comments</strong> to fetch live comments and
-            classify them into Toxic and Non-Toxic categories.</p>
-        </div>
-
-        <!-- 2. Loading State -->
-        <div class="loading-state" id="loading-state" style="display: none;" role="status">
-          <div class="spinner"></div>
-          <h3>Fetching & Analyzing Comments ...</h3>
-          <p>Retrieving accessible comments via YouTube Data API and evaluating toxicity with the trained multi-label
-            machine learning model.</p>
-        </div>
-
-        <!-- 3. Active Results View -->
-        <div class="analysis-results" id="analysis-results" style="display: none;">
-
-          <!-- Summary Metrics Cards -->
-          <div class="stats-row">
-            <div class="stat-box">
-              <span class="stat-label">Total Analyzed</span>
-              <span class="stat-number" id="stat-total">0</span>
-            </div>
-            <div class="stat-box stat-toxic">
-              <span class="stat-label">Toxic Comments</span>
-              <span class="stat-number color-toxic" id="stat-toxic">0</span>
-              <span class="stat-pct pct-toxic" id="stat-toxic-pct">0.0%</span>
-            </div>
-            <div class="stat-box stat-clean">
-              <span class="stat-label">Non-Toxic</span>
-              <span class="stat-number color-clean" id="stat-clean">0</span>
-              <span class="stat-pct pct-clean" id="stat-clean-pct">0.0%</span>
-            </div>
-          </div>
-
-          <!-- Ratio Progress Bar -->
-          <div class="ratio-container">
-            <div class="ratio-labels">
-              <span>Non-Toxic: <strong id="ratio-clean-text">0.0%</strong></span>
-              <span>Toxic: <strong id="ratio-toxic-text">0.0%</strong></span>
-            </div>
-            <div class="ratio-track">
-              <div id="bar-clean" class="ratio-bar-clean" style="width: 50%;"></div>
-              <div id="bar-toxic" class="ratio-bar-toxic" style="width: 50%;"></div>
-            </div>
-            <p class="ratio-footnote" id="ratio-disclaimer">
-              * Percentages describe comments successfully retrieved and analyzed, not every comment ever posted.
-            </p>
-          </div>
-
-          <!-- Emoji Toxicity Signals Strip -->
-          <div class="emoji-signals-strip" id="emoji-signals-strip" style="display: none;">
-            <div class="emoji-signal-header">
-              <span class="emoji-signal-title">&#129504; Emoji Toxicity &amp; Sarcasm Signals</span>
-              <span class="emoji-signal-badge">NLP + Multi-Label</span>
-            </div>
-            <div class="emoji-signal-metrics">
-              <div class="emoji-metric-chip">
-                <span>With Emojis</span>
-                <strong id="stat-emoji-total">0</strong>
+            <!-- Expandable Video Description Box -->
+            <div class="video-desc-card" id="video-desc-card">
+              <div class="desc-card-top">
+                <span class="desc-card-title">&#128221; Description</span>
+                <button type="button" class="desc-toggle-btn" id="desc-toggle-btn" onclick="toggleDescription()">Show
+                  more</button>
               </div>
-              <div class="emoji-metric-chip chip-toxic">
-                <span>Toxic Emojis</span>
-                <strong id="stat-emoji-toxic">0</strong>
-              </div>
-              <div class="emoji-metric-chip chip-sarcasm">
-                <span>Sarcasm Detected</span>
-                <strong id="stat-emoji-sarcasm">0</strong>
+              <div class="desc-content collapsed" id="video-description">
+                No description available for this video.
               </div>
             </div>
-            <div class="emoji-top-clusters" id="emoji-top-clusters">
-              <!-- Dynamically populated top emojis -->
+
+          </div>
+        </article>
+
+        <!-- RIGHT COLUMN: Comment Analysis -->
+        <article class="panel results-panel">
+          <div class="results-header">
+            <h2 class="panel-title">Comment analysis</h2>
+            <span class="panel-tag">Toxicity Engine</span>
+          </div>
+
+          <!-- 1. Initial Empty State -->
+          <div class="empty-state" id="empty-state" role="status" aria-live="polite">
+            <span class="empty-icon" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </span>
+            <h2>Ready to Analyze YouTube Comments</h2>
+            <p>Paste any YouTube video or Shorts link above and click <strong>Analyze Comments</strong> to inspect toxicity patterns, analyze multi-language sentiment, and extract insights.</p>
+            <div class="empty-feature-chips">
+              <span class="empty-chip chip-ml">⚡ Contextual Multi-Label ML</span>
+              <span class="empty-chip chip-kn">🇮🇳 Kannada &amp; Mixed Script NLP</span>
+              <span class="empty-chip chip-emoji">🎭 Emoji Sarcasm Engine</span>
+              <span class="empty-chip chip-hitl">🛡️ Active Human-in-the-Loop</span>
             </div>
           </div>
 
-          <!-- Comments Filter Bar -->
-          <div class="filter-row">
-            <div class="filter-buttons">
-              <button type="button" class="filter-tab active" data-filter="all" onclick="setFilter('all')">
-                All (<span id="count-all">0</span>)
-              </button>
-              <button type="button" class="filter-tab tab-toxic" data-filter="toxic" onclick="setFilter('toxic')">
-                Toxic (<span id="count-toxic">0</span>)
-              </button>
-              <button type="button" class="filter-tab tab-clean" data-filter="clean" onclick="setFilter('clean')">
-                Non-Toxic (<span id="count-clean">0</span>)
-              </button>
-              <button type="button" class="filter-tab tab-kannada" data-filter="kannada" onclick="setFilter('kannada')">
-                ಕನ್ನಡ (<span id="count-kannada">0</span>)
-              </button>
-              <button type="button" class="filter-tab tab-emoji" data-filter="emoji" onclick="setFilter('emoji')">
-                Emojis (<span id="count-emoji">0</span>)
-              </button>
+          <!-- 2. Loading State -->
+          <div class="loading-state" id="loading-state" style="display: none;" role="status">
+            <div class="spinner"></div>
+            <h3>Fetching & Analyzing Comments ...</h3>
+            <p>Retrieving accessible comments via YouTube Data API and evaluating toxicity with the trained
+              multi-label
+              machine learning model.</p>
+          </div>
+
+          <!-- 3. Active Results View -->
+          <div class="analysis-results" id="analysis-results" style="display: none;">
+
+            <!-- Summary Metrics Cards -->
+            <div class="stats-row">
+              <div class="stat-box">
+                <span class="stat-label">Total Analyzed</span>
+                <span class="stat-number" id="stat-total">0</span>
+              </div>
+              <div class="stat-box stat-toxic">
+                <span class="stat-label">Toxic Comments</span>
+                <span class="stat-number color-toxic" id="stat-toxic">0</span>
+                <span class="stat-pct pct-toxic" id="stat-toxic-pct">0.0%</span>
+              </div>
+              <div class="stat-box stat-clean">
+                <span class="stat-label">Non-Toxic</span>
+                <span class="stat-number color-clean" id="stat-clean">0</span>
+                <span class="stat-pct pct-clean" id="stat-clean-pct">0.0%</span>
+              </div>
             </div>
-          </div>
 
-          <!-- Comment Cards List -->
-          <div class="comments-scroll-list" id="comments-container">
-            <!-- Dynamically populated via JS -->
-          </div>
-
-          <!-- High Volume Pagination / Progressive Loader -->
-          <div class="load-more-bar" id="load-more-bar" style="display: none;">
-            <span class="load-more-info" id="load-more-info">Showing 100 comments</span>
-            <div class="load-more-actions">
-              <button type="button" class="load-more-btn" id="load-more-btn" onclick="loadMoreComments()">
-                Load next 100 comments
-              </button>
-              <button type="button" class="load-all-btn" id="load-all-btn" onclick="loadAllComments()">
-                Show all
-              </button>
+            <!-- Ratio Progress Bar -->
+            <div class="ratio-container">
+              <div class="ratio-labels">
+                <span>Non-Toxic: <strong id="ratio-clean-text">0.0%</strong></span>
+                <span>Toxic: <strong id="ratio-toxic-text">0.0%</strong></span>
+              </div>
+              <div class="ratio-track">
+                <div id="bar-clean" class="ratio-bar-clean" style="width: 50%;"></div>
+                <div id="bar-toxic" class="ratio-bar-toxic" style="width: 50%;"></div>
+              </div>
+              <p class="ratio-footnote" id="ratio-disclaimer">
+                * Percentages describe comments successfully retrieved and analyzed, not every comment ever posted.
+              </p>
             </div>
+
+            <!-- Emoji Toxicity Signals Strip -->
+            <div class="emoji-signals-strip" id="emoji-signals-strip" style="display: none;">
+              <div class="emoji-signal-header">
+                <span class="emoji-signal-title">&#129504; Emoji Toxicity &amp; Sarcasm Signals</span>
+                <span class="emoji-signal-badge">NLP + Multi-Label</span>
+              </div>
+              <div class="emoji-signal-metrics">
+                <div class="emoji-metric-chip">
+                  <span>With Emojis</span>
+                  <strong id="stat-emoji-total">0</strong>
+                </div>
+                <div class="emoji-metric-chip chip-toxic">
+                  <span>Toxic Emojis</span>
+                  <strong id="stat-emoji-toxic">0</strong>
+                </div>
+                <div class="emoji-metric-chip chip-sarcasm">
+                  <span>Sarcasm Detected</span>
+                  <strong id="stat-emoji-sarcasm">0</strong>
+                </div>
+              </div>
+              <div class="emoji-top-clusters" id="emoji-top-clusters">
+                <!-- Dynamically populated top emojis -->
+              </div>
+            </div>
+
+            <!-- Comments Filter Bar -->
+            <div class="filter-row">
+              <div class="filter-buttons">
+                <button type="button" class="filter-tab active" data-filter="all" onclick="setFilter('all')">
+                  All (<span id="count-all">0</span>)
+                </button>
+                <button type="button" class="filter-tab tab-toxic" data-filter="toxic" onclick="setFilter('toxic')">
+                  Toxic (<span id="count-toxic">0</span>)
+                </button>
+                <button type="button" class="filter-tab tab-clean" data-filter="clean" onclick="setFilter('clean')">
+                  Non-Toxic (<span id="count-clean">0</span>)
+                </button>
+                <button type="button" class="filter-tab tab-kannada" data-filter="kannada"
+                  onclick="setFilter('kannada')">
+                  ಕನ್ನಡ (<span id="count-kannada">0</span>)
+                </button>
+                <button type="button" class="filter-tab tab-emoji" data-filter="emoji" onclick="setFilter('emoji')">
+                  Emojis (<span id="count-emoji">0</span>)
+                </button>
+              </div>
+            </div>
+
+            <!-- Comment Cards List -->
+            <div class="comments-scroll-list" id="comments-container">
+              <!-- Dynamically populated via JS -->
+            </div>
+
+            <!-- High Volume Pagination / Progressive Loader -->
+            <div class="load-more-bar" id="load-more-bar" style="display: none;">
+              <span class="load-more-info" id="load-more-info">Showing 100 comments</span>
+              <div class="load-more-actions">
+                <button type="button" class="load-more-btn" id="load-more-btn" onclick="loadMoreComments()">
+                  Load next 100 comments
+                </button>
+                <button type="button" class="load-all-btn" id="load-all-btn" onclick="loadAllComments()">
+                  Show all
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty Filter Notification -->
+            <div class="empty-filter" id="empty-filter" style="display: none;">
+              <p>No comments found under the selected filter.</p>
+            </div>
+
           </div>
 
-          <!-- Empty Filter Notification -->
-          <div class="empty-filter" id="empty-filter" style="display: none;">
-            <p>No comments found under the selected filter.</p>
-          </div>
+        </article>
+      </section>
+    </div> <!-- /#view-detection -->
 
-        </div>
 
-      </article>
-  </section>
   </main>
 
-  <footer class="page-footer">
-    <div class="footer-inner">
-      <span>YouTube Toxic Comment Analyzer &bull; Trained on Jigsaw Challenge Dataset</span>
-      <div class="footer-links">
-        <a href="https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data" target="_blank"
-          rel="noopener">Dataset</a>
-        <a href="https://developers.google.com/youtube/v3" target="_blank" rel="noopener">YouTube API</a>
-      </div>
-    </div>
-  </footer>
-
-  <script src="/static/js/app.js?v=5"></script>
+  <script src="/static/js/app.js?v=20"></script>
 </body>
 
 </html>

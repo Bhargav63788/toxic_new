@@ -44,6 +44,12 @@ from src.youtube_analyzer import (
     fetch_youtube_comments_and_meta,
     analyze_youtube_comments
 )
+from src.genre_analyzer import (
+    SUPPORTED_GENRES,
+    normalize_genre,
+    suggest_video_genre,
+    get_genre_evaluator
+)
 
 app = Flask(
     __name__,
@@ -51,6 +57,15 @@ app = Flask(
     static_folder="static"
 )
 app.config["JSON_SORT_KEYS"] = False
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 # Load model artifacts once during startup
 print("Initializing YouTube Toxic Comment Analyzer backend ...")
@@ -67,8 +82,7 @@ except Exception as e:
 @app.route("/")
 def index():
     """Serve the single-page YouTube Toxic Comment Analyzer interface."""
-    has_env_key = bool(os.environ.get("YOUTUBE_API_KEY", "").strip())
-    return render_template("index.html", has_env_key=has_env_key)
+    return render_template("index.html")
 
 
 @app.route("/api/health", methods=["GET"])
@@ -82,10 +96,20 @@ def health():
         "model_loaded": model_ready,
         "kannada_model_loaded": kannada_ready,
         "supported_languages": ["English", "Kannada (ಕನ್ನಡ)", "Kanglish (Romanized Kannada)"],
+        "supported_genres": SUPPORTED_GENRES,
         "youtube_api_key_configured": has_api_key,
         "labels": ARTIFACTS["labels"] if model_ready else [],
         "server_time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }), 200 if model_ready else 503
+
+
+@app.route("/api/genres", methods=["GET"])
+def get_genres():
+    """Return list of supported video genres."""
+    return jsonify({
+        "status": "success",
+        "genres": SUPPORTED_GENRES
+    }), 200
 
 
 @app.route("/api/analyze_youtube", methods=["POST"])
@@ -112,7 +136,7 @@ def analyze_youtube():
         }), 400
 
     data = request.get_json(silent=True) or {}
-    url_or_id = data.get("url", "")
+    url_or_id = data.get("url") or data.get("video_url", "")
     api_key_override = data.get("api_key", "").strip() or None
     raw_max = data.get("max_comments")
     if raw_max is None or str(raw_max).strip().lower() in ("", "none", "null", "all", "max"):
@@ -153,13 +177,31 @@ def analyze_youtube():
         use_demo_if_missing_key=True
     )
 
+    # Resolve Video Genre (user-selected or suggested from video metadata)
+    user_genre = str(data.get("genre") or "").strip()
+    suggested_genre, genre_conf = suggest_video_genre(
+        title=str(video_meta.get("title") or ""),
+        description=str(video_meta.get("description") or ""),
+        tags=video_meta.get("tags") or []
+    )
+    if user_genre and user_genre.lower() not in ("auto", "detect", "auto-detect", "general / auto-detect"):
+        resolved_genre = normalize_genre(user_genre)
+    elif suggested_genre != "General" and genre_conf >= 0.2:
+        resolved_genre = suggested_genre
+    else:
+        resolved_genre = "General"
+
     if err_msg:
         # If comments are disabled, return clean success with 0 comments and creator notification
-        if "comments are disabled" in err_msg.lower():
+        err_lower = err_msg.lower()
+        if any(term in err_lower for term in ("disabled", "commentsdisabled", "insufficient permissions", "restricted on this youtube video")):
             return jsonify({
                 "status": "success",
                 "video_id": video_id,
                 "video_meta": video_meta,
+                "video_genre": resolved_genre,
+                "suggested_genre": suggested_genre,
+                "genre_confidence": genre_conf,
                 "total_analyzed": 0,
                 "toxic_count": 0,
                 "non_toxic_count": 0,
@@ -168,7 +210,7 @@ def analyze_youtube():
                 "category_counts": {l: 0 for l in DEFAULT_LABELS},
                 "comments": [],
                 "latency_ms": round((time.perf_counter() - t_start) * 1000, 1),
-                "disclaimer": "Comments are disabled on this YouTube video by the creator."
+                "disclaimer": err_msg or "Comments are disabled or restricted on this YouTube video by the creator."
             }), 200
 
         # Check other error types
@@ -182,11 +224,13 @@ def analyze_youtube():
             "status": "error",
             "message": err_msg,
             "video_id": video_id,
-            "video_meta": video_meta
+            "video_meta": video_meta,
+            "video_genre": resolved_genre,
+            "suggested_genre": suggested_genre
         }), status_code
 
-    # 3. Analyze comments through trained ML model
-    analysis_result = analyze_youtube_comments(comments, ARTIFACTS)
+    # 3. Analyze comments through trained ML model with genre context
+    analysis_result = analyze_youtube_comments(comments, ARTIFACTS, genre=resolved_genre)
     latency_ms = round((time.perf_counter() - t_start) * 1000, 1)
 
     total_analyzed = analysis_result["total_analyzed"]
@@ -211,6 +255,9 @@ def analyze_youtube():
         "status": "success",
         "video_id": video_id,
         "video_meta": video_meta,
+        "video_genre": resolved_genre,
+        "suggested_genre": suggested_genre,
+        "genre_confidence": genre_conf,
         "total_analyzed": total_analyzed,
         "toxic_count": analysis_result["toxic_count"],
         "non_toxic_count": analysis_result["non_toxic_count"],
@@ -235,14 +282,20 @@ def predict():
         return jsonify({"status": "error", "message": "JSON payload required."}), 400
 
     data = request.get_json(silent=True) or {}
-    raw_text = data.get("text")
+    raw_text = data.get("text") or data.get("comment")
     compare_mode = bool(data.get("compare", True))
+    genre = str(data.get("genre") or "General")
     is_valid, err_msg = validate_input_comment(raw_text, max_chars=5000)
     if not is_valid:
         status_code = 413 if "exceeds maximum" in err_msg.lower() else 400
         return jsonify({"status": "error", "message": err_msg}), status_code
 
-    result = predict_comment(raw_text, artifacts=ARTIFACTS, return_comparison=compare_mode)
+    result = predict_comment(
+        raw_text,
+        artifacts=ARTIFACTS,
+        return_comparison=compare_mode,
+        video_genre=genre
+    )
     return jsonify(result), 200
 
 

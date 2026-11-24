@@ -13,12 +13,23 @@ ENV/
 htmlcov/
 .env
 
-# Data files (raw and processed datasets should not be committed to Git)
-data/
-*.csv
+# Database & Retraining Caches
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.db-journal
+models/versions/
+
+# Datasets & Large Data Files
+data/raw/
+data/processed/
 *.csv.gz
 *.tsv
 *.parquet
+data/*.csv
+!data/kannada_comments_dataset.csv
 
 # IDE and OS files
 .DS_Store

@@ -317,29 +317,11 @@ EMOJI_LEXICON = {
         "contribution_label": "Two-Faced / Hypocrisy Accusation",
         "explanation": "Masks used in debate to brand someone as a fake, actor, or two-faced fraud"
     },
-    "😂": {
-        "name": "face with tears of joy",
-        "category": "sarcastic_mockery",
-        "sentiment": "mocking_laughter",
-        "base_probs": {"toxic": 0.35, "insult": 0.35, "obscene": 0.05, "severe_toxic": 0.01, "threat": 0.01, "identity_hate": 0.01},
-        "primary_label": "insult",
-        "contribution_label": "Mocking Laughter / Taunt",
-        "explanation": "Laughing emoji used contextually to mock, ridicule, or deride"
-    },
-    "🤣": {
-        "name": "rolling on the floor laughing",
-        "category": "sarcastic_mockery",
-        "sentiment": "mocking_laughter",
-        "base_probs": {"toxic": 0.38, "insult": 0.38, "obscene": 0.05, "severe_toxic": 0.01, "threat": 0.01, "identity_hate": 0.01},
-        "primary_label": "insult",
-        "contribution_label": "Derisive Mockery / Laughter",
-        "explanation": "Rolling laughing emoji deployed to taunt or demean"
-    },
     "💀": {
         "name": "skull",
         "category": "sarcastic_mockery",
         "sentiment": "derisive_mockery",
-        "base_probs": {"toxic": 0.35, "insult": 0.35, "threat": 0.15, "obscene": 0.05, "severe_toxic": 0.02, "identity_hate": 0.01},
+        "base_probs": {"toxic": 0.08, "insult": 0.08, "threat": 0.05, "obscene": 0.02, "severe_toxic": 0.01, "identity_hate": 0.01},
         "primary_label": "insult",
         "contribution_label": "Mocking Contempt / Derision",
         "explanation": "Skull emoji used contextually for derision or humiliation"
@@ -348,16 +330,18 @@ EMOJI_LEXICON = {
 
 # Positive / Praise / Respectful Emojis that mitigate toxicity and signal constructive intent
 POSITIVE_PRAISE_EMOJIS = {
-    # Hearts
-    "❤️", "💖", "💕", "💓", "💗", "💘", "💙", "💚", "💛", "💜", "🤍", "🤎", "🖤", "❣️", "💞",
+    # Hearts (bare ❤ U+2764 and ❤️ with variation selector both included)
+    "❤", "❤️", "💖", "💕", "💓", "💗", "💘", "💙", "💚", "💛", "💜", "🤍", "🤎", "🖤", "❣️", "💞",
     # Thumbs & gestures
     "👍", "👏", "🙌", "🤝", "👌", "✌️", "🤞", "👊",
     # Cultural & Gratitude
     "🙏", "🚩", "💐", "🌸", "🌺", "🌻", "🌹", "🌷", "🌼",
     # Enthusiasm & Achievement
     "🔥", "💯", "⭐", "🌟", "✨", "🏆", "🥇", "🥈", "🥉", "👑", "🎯", "🎉", "🎊", "🥂", "🚀",
-    # Smiles & Love
-    "😊", "😀", "😃", "😄", "😁", "🥰", "😍", "🤩", "😇", " warm", "🤗", "😎", "🥳"
+    # Smiles, Love & Laughter (laughing/crying emojis default to positive; sarcasm rule handles hostile combos)
+    "😊", "😀", "😃", "😄", "😁", "🥰", "😍", "🤩", "😇", "🤗", "😎", "🥳",
+    "😂", "🤣", "😆", "😅", "😹",
+    "😢", "😭", "🥺", "😸"
 }
 
 # Cultural Kannada positive combinations
